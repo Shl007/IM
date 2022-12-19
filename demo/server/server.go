@@ -17,6 +17,7 @@ type Server struct {
 	once    sync.Once
 	id      string
 	address string
+	options ServerOptions
 	sync.Mutex
 	// a list of sessions
 	users map[string]net.Conn
@@ -36,6 +37,10 @@ func newServer(id, address string) *Server {
 		id:      id,
 		address: address,
 		users:   make(map[string]net.Conn, 100),
+		options: ServerOptions{
+			writewait: time.Second * 10,
+			readwait:  time.Minute * 2,
+		},
 	}
 }
 
@@ -109,10 +114,16 @@ func (s *Server) Shutdown() {
 
 func (s *Server) readloop(user string, conn net.Conn) interface{} {
 	for {
+		conn.SetReadDeadline(time.Now().Add(s.options.readwait))
 		// 从TCP缓冲区读取一帧的消息
 		frame, err := ws.ReadFrame(conn)
 		if err != nil {
 			return err
+		}
+		if frame.Header.OpCode == ws.OpPing {
+			_ = wsutil.WriteServerMessage(conn, ws.OpPong, nil)
+			logrus.Info("wirte a pong...")
+			continue
 		}
 		if frame.Header.OpCode == ws.OpClose {
 			return errors.New("remote side close the conn")
@@ -126,6 +137,8 @@ func (s *Server) readloop(user string, conn net.Conn) interface{} {
 		}
 		if frame.Header.OpCode == ws.OpText {
 			go s.handel(user, string(frame.Payload))
+		} else if frame.Header.OpCode == ws.OpBinary {
+			go s.handleBinary(user, frame.Payload)
 		}
 	}
 }
