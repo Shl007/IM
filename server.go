@@ -22,6 +22,25 @@ const (
 	OpPong           OpCode = 0xa
 )
 
+// 定义了基础服务的抽象接口
+type Service interface {
+	ServiceID() string
+	ServiceName() string
+	GetMeta() map[string]string
+}
+
+// 定义服务注册的抽象接口
+type ServiceRegistration interface {
+	Service
+	PublicAddress() string
+	PublicPort() int
+	DialURL() string
+	GetTags() []string
+	GetProtocol() string
+	GetNamespace() string
+	String() string
+}
+
 type Server interface {
 	SetAcceptor(Acceptor)
 	SetMessageListener(MessageListener)
@@ -85,6 +104,7 @@ type Dialer interface {
 
 // Client is interface of client side
 type Client interface {
+	Service
 	ID() string
 	Name() string
 	// connect to server
